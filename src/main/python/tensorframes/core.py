@@ -30,8 +30,13 @@ def _java_api():
     return _jvm.Thread.currentThread().getContextClassLoader().loadClass(javaClassName) \
         .newInstance()
 
+# Can return None
 def _get_shape(node):
-    l = node.get_shape().as_list()
+    # Some pathological nodes have no shape
+    s = node.get_shape()
+    if s.dims is None:
+        return None
+    l = s.as_list()
     return [-1 if x is None else x for x in l]
 
 def _add_graph(graph, builder):
@@ -50,10 +55,14 @@ def _add_shapes(graph, builder, fetches):
         # Just the input nodes:
         if not n.input:
             op_name = n.name
-            # Simply get the default output for now, assume that the nodes have only one output
-            t = graph.get_tensor_by_name(op_name + ":0")
-            ph_names.append(t.name)
-            ph_shapes.append(_get_shape(t))
+            op = graph.get_operation_by_name(op_name)
+            if op.type == "Placeholder":
+                # Simply get the default output for now, assume that the nodes have only one output
+                t = graph.get_tensor_by_name(op_name + ":0")
+                shape = _get_shape(t)
+                if shape is not None:
+                    ph_names.append(t.name)
+                    ph_shapes.append(shape)
     logger.info("fetches: %s %s", str(names), str(shapes))
     logger.info("inputs: %s %s", str(ph_names), str(ph_shapes))
     builder.shape(names + ph_names, shapes + ph_shapes)
@@ -66,7 +75,10 @@ def _check_fetches(fetches):
     return fetches
 
 def _get_graph(fetches):
-    graph = tf.get_default_graph()
+    assert len(fetches) > 0, "no fetch specified"
+    graph = fetches[0].graph
+    for fetch in fetches:
+        assert fetch.graph is graph, "Different underlying graph for the fetches"
     fetch_names = [_validate_fetch(graph, fetch) for fetch in fetches]
     logger.info("Fetch names: %s", str(fetch_names))
     # String the output index
@@ -91,6 +103,17 @@ def _unpack_row(jdf, fetches):
         return l[0]
     return l
 
+def _create_df(jdf, sql, graph):
+    """
+    Creates a dataframe and embeds the tensorflow graph into the dataframe.
+    :param jdf:
+    :param graph:
+    :param _sql:
+    :return:
+    """
+    df = DataFrame(jdf, sql)
+    df.tf_graph = graph
+    return df
 
 def reduce_rows(fetches, dframe):
     """ Applies the fetches on pairs of rows, so that only one row of data remains in the end. The order in which
@@ -167,7 +190,7 @@ def map_rows(fetches, dframe):
     _add_graph(graph, builder)
     _add_shapes(graph, builder, fetches)
     jdf = builder.buildDF()
-    return DataFrame(jdf, _sql)
+    return _create_df(jdf, _sql, graph)
 
 def map_blocks(fetches, dframe, trim=False):
     """ Transforms a DataFrame into another DataFrame block by block.
@@ -215,7 +238,7 @@ def map_blocks(fetches, dframe, trim=False):
     _add_graph(graph, builder)
     _add_shapes(graph, builder, fetches)
     jdf = builder.buildDF()
-    return DataFrame(jdf, _sql)
+    return _create_df(jdf, _sql, graph)
 
 def reduce_blocks(fetches, dframe):
     """ Applies the fetches on blocks of rows, so that only one row of data remains in the end. The order in which
@@ -328,6 +351,7 @@ def row(df, col_name, tf_name = None):
     :return: a TensorFlow placeholder.
     """
     return _auto_placeholder(df, col_name, tf_name, block = False)
+
 
 def _auto_placeholder(df, col_name, tf_name, block):
     info = _java_api().extra_schema_info(df._jdf)

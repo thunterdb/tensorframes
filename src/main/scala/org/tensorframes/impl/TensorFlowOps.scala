@@ -87,8 +87,13 @@ object TensorFlowOps extends Logging {
     logTrace(s"analyzeGraph: graph=$graphDef")
 
     val nodes = graphDef.getNodeList.asScala
+    // The set of all nodes in the graph that have children. This is used to prune out
+    // dangling placeholders (which happen in the case of imported graphs).
+    // This should not be too much of a restrictions because we explicitly require that output
+    // nodes have different names from input nodes.
+    val hasOutput: Set[String] = nodes.flatMap { n => n.getInputList.asScala } .toSet
     val inputs: Set[String] = nodes
-      .filter(n => n.getInputCount == 0 && n.getOp == "Placeholder")
+      .filter(n => n.getInputCount == 0 && n.getOp == "Placeholder" && hasOutput.contains(n.getName))
       .map(_.getName).toSet
     // We identify a node with its output tensor.
     val outputs = shapeHints.requestedFetches.map(_.stripSuffix(":0")).toSet

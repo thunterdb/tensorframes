@@ -31,6 +31,7 @@ on the project wiki.
 
 """
 
-__version__ = "2.0.0"
+__version__ = "2.3.0"
 
 from core import *
+from display import display

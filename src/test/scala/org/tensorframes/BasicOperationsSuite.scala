@@ -248,3 +248,21 @@ class BasicOperationsSuite
 
 
 }
+
+class CornerCasesSuite
+  extends FunSuite with TensorFramesTestSparkContext with Logging with GraphScoping {
+  lazy val sql = sqlContext
+
+  import Shape.Unknown
+
+  val ops = new DebugRowOps
+
+  testGraph("Dangling placeholders should not be picked up") {
+    val df = make1(Seq(1.0, 2.0), "in")
+    val p1 = placeholder[Double](Unknown) named "in"
+    val p2 = placeholder[Double](Unknown) named "in_bad"
+    val out = identity(p1) named "out"
+    val df2 = df.mapBlocks(out).select("in", "out")
+    assert(df2.collect() === Array(Row(1.0, 1.0), Row(2.0, 2.0)))
+  }
+}
