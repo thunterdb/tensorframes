@@ -99,6 +99,17 @@ class TestCore(object):
         data2 = df2.collect()
         assert data2[0].z == 2, data2
 
+    def test_map_rows_unsafe_1(self):
+        data = [Row(x=float(x)) for x in range(3)]
+        df = self.sql.createDataFrame(data)
+        g = tf.Graph()
+        with g.as_default():
+            # The placeholder that corresponds to column 'x'
+            x = tf.placeholder(tf.double, shape=[], name="x")
+            # The output discards the input and return a single row of data
+            z = tf.constant(2, name='z')
+        df2 = tfs.map_rows(z, df, session="session", cache_graph=True)
+
 
 if __name__ == "__main__":
     # Some testing stuff that should not be executed
@@ -118,3 +129,15 @@ if __name__ == "__main__":
         tf.constant([1.0], name="x3")
         tf.constant([1.0, 2.0], name="x4")
         print g.as_graph_def()
+
+
+if __name__ == "foo":
+    from pyspark import SparkContext
+    from pyspark.sql import DataFrame, SQLContext
+    from pyspark.sql import Row
+    import tensorflow as tf
+    import tensorframes as tfs
+    sc.setLogLevel("DEBUG")
+    data = [Row(x=float(x)) for x in range(3)]
+    df = sqlContext.createDataFrame(data)
+

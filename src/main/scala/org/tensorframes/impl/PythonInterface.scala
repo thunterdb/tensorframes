@@ -2,6 +2,8 @@ package org.tensorframes.impl
 
 import java.util
 
+import org.apache.spark.Logging
+
 import scala.collection.JavaConverters._
 
 import org.apache.log4j.PropertyConfigurator
@@ -84,7 +86,7 @@ class PythonOpBuilder(
     interface: OperationsInterface with ExperimentalOperations,
     op: PythonInterface.Operation,
     df: DataFrame = null,
-    groupedData: GroupedData = null) {
+    groupedData: GroupedData = null) extends Logging {
   import PythonInterface._
   private var _shapeHints: ShapeDescription = ShapeDescription.empty
   private var _graph: GraphDef = null
@@ -107,6 +109,7 @@ class PythonOpBuilder(
   def graph(bytes: Array[Byte], graphId: String): this.type = {
     _graph = TensorFlowOps.readGraphSerial(bytes)
     if (graphId != null) {
+      logDebug(s"Registering graphId = ${_graph.hashCode()} for python id: $graphId")
       MemoizedGraphs.default.register(graphId, _graph)
     }
     this
@@ -120,9 +123,12 @@ class PythonOpBuilder(
   def reuseGraph(graphId: String): Boolean = {
     MemoizedGraphs.default.registeredGraph(graphId) match {
       case Some(g) =>
+        logDebug(s"Reusing graphId = ${g.hashCode()} for python id: $graphId")
         _graph = g
         true
-      case None => false
+      case None =>
+        logDebug(s"Graph not found for python id: $graphId")
+        false
     }
   }
 

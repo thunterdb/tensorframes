@@ -1,12 +1,13 @@
 package org.tensorframes.impl
 
-import org.apache.spark.{Logging, SparkContext}
-import org.apache.spark.broadcast.Broadcast
+import scala.util.control.NonFatal
+
+import org.bytedeco.javacpp.{tensorflow => jtf}
 import org.tensorflow.framework.GraphDef
 import org.tensorframes.ShapeDescription
-import org.bytedeco.javacpp.{BytePointer, tensorflow => jtf}
 
-import scala.util.control.NonFatal
+import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.broadcast.Broadcast
 
 /**
  * Builds some caches for the graph objects, to limit the cost of analysis and communication.
@@ -105,9 +106,9 @@ object MemoizedSessions extends Logging {
 
   def withSession[T](sessionName: Option[String],
                      graphDataBC: Broadcast[Array[Byte]])(fun: jtf.Session => T): T = synchronized {
-    logInfo(s"trying to enter session name:$sessionName bc:$graphDataBC")
-    sessionName match {
+    val res = sessionName match {
       case None =>
+        logInfo(s"trying to enter regular session name:$sessionName bc:$graphDataBC")
         TensorFlowOps.withSession { session =>
           val graphData = graphDataBC.value
           val g = TensorFlowOps.readGraph(graphData)
@@ -117,8 +118,11 @@ object MemoizedSessions extends Logging {
         }
       case Some(name) =>
         val sess = savedSessions.get(name) match {
-          case Some(s) => s
+          case Some(s) =>
+            logInfo(s"trying to enter reuse session name:$sessionName bc:$graphDataBC")
+            s
           case None =>
+            logInfo(s"trying to create session for reuse name:$sessionName bc:$graphDataBC")
             TensorFlowOps.initTensorFlow()
             val options = new jtf.SessionOptions()
             val graphData = graphDataBC.value
@@ -131,5 +135,7 @@ object MemoizedSessions extends Logging {
         }
         fun(sess)
     }
+    logInfo(s"Session finished:$sessionName")
+    res
   }
 }
