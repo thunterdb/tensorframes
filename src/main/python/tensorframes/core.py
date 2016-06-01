@@ -39,10 +39,17 @@ def _get_shape(node):
     l = s.as_list()
     return [-1 if x is None else x for x in l]
 
-def _add_graph(graph, builder):
+def _add_graph(graph, builder, cache_graph):
+    # We are going to take the identity of the graph as the reference. It is not great if
+    # people want to reuse the graph, but it will do for now.
+    key = str(id(graph))
+    if cache_graph:
+        if builder.reuseGraph(key):
+            logger.info("Reusing graph ID {0}".format(key))
+            return
     gser = graph.as_graph_def().SerializeToString()
     gbytes = bytearray(gser)
-    builder.graph(gbytes)
+    builder.graph(gbytes, key)
 
 def _add_shapes(graph, builder, fetches):
     names = [fetch.name for fetch in fetches]
@@ -152,7 +159,7 @@ def reduce_rows(fetches, dframe):
     df = builder.buildRow()
     return _unpack_row(df, fetches)
 
-def map_rows(fetches, dframe):
+def map_rows(fetches, dframe, session=None, cache_graph=False):
     """ Transforms a DataFrame into another DataFrame row by row, by adding new fields for each fetch.
 
     The `fetches` argument may be a list of graph elements or a single
@@ -187,8 +194,10 @@ def map_rows(fetches, dframe):
     fetches = _check_fetches(fetches)
     graph = _get_graph(fetches)
     builder = _java_api().map_rows(dframe._jdf)
-    _add_graph(graph, builder)
+    _add_graph(graph, builder, cache_graph)
     _add_shapes(graph, builder, fetches)
+    if session:
+        builder.session(session)
     jdf = builder.buildDF()
     return _create_df(jdf, _sql, graph)
 

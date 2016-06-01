@@ -4,6 +4,7 @@ import org.apache.spark.Logging
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{ArrayType, DataType, NumericType}
+import org.tensorflow.framework.GraphDef
 import org.tensorframes.impl.SupportedOperations
 
 /**

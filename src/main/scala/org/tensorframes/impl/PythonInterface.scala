@@ -102,9 +102,28 @@ class PythonOpBuilder(
     this
   }
 
-  def graph(bytes: Array[Byte]): this.type = {
+  def graph(bytes: Array[Byte]): this.type = graph(bytes, null)
+
+  def graph(bytes: Array[Byte], graphId: String): this.type = {
     _graph = TensorFlowOps.readGraphSerial(bytes)
+    if (graphId != null) {
+      MemoizedGraphs.default.register(graphId, _graph)
+    }
     this
+  }
+
+  def session(s: String): this.type = {
+    _shapeHints = _shapeHints.copy(requestedSession = Some(s))
+    this
+  }
+
+  def reuseGraph(graphId: String): Boolean = {
+    MemoizedGraphs.default.registeredGraph(graphId) match {
+      case Some(g) =>
+        _graph = g
+        true
+      case None => false
+    }
   }
 
   def buildRow(): DataFrame = op match {

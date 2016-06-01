@@ -394,6 +394,7 @@ class DebugRowOps
       graph: GraphDef,
       shapeHints: ShapeDescription): DataFrame = {
     val sc = dataframe.sqlContext.sparkContext
+    val summaries = MemoizedGraphs.default.analyze(graph, shapeHints)
     val summary = TensorFlowOps.analyzeGraph(graph, shapeHints)
       .map(x => x.name -> x).toMap
     val inputs = summary.filter(_._2.isInput)
@@ -452,13 +453,15 @@ class DebugRowOps
     val schema = dataframe.schema // Classic rookie mistake...
     logDebug(s"mapRows: input schema = $schema, requested cols: ${requestedTFInput.toSeq}" +
       s" complete output schema = $outputSchema")
-    val gProto = sc.broadcast(TensorFlowOps.graphSerial(graph))
+    val gProto = MemoizedGraphs.default.broadcastGraph(graph)
+    val sessionName = shapeHints.requestedSession
     val transformRdd = dataframe.rdd.mapPartitions { it =>
       DebugRowOpsImpl.performMapRows(
         it.toArray,
         schema,
         requestedTFInput,
-        gProto.value,
+        sessionName,
+        gProto,
         outputTFSchema).toIterator
     }
     dataframe.sqlContext.createDataFrame(transformRdd, outputSchema)
@@ -806,6 +809,35 @@ object DebugRowOpsImpl extends Logging {
       TensorFlowOps.graphSerial(graphDef), outputSchema, appendInput = true).map { row =>
       SerializationUtils.clone(row)
     } .toSeq.toArray
+  }
+
+  def performMapRows(
+      input: Array[Row],
+      inputSchema: StructType,
+      inputTFCols: Array[Int],
+      sessionName: Option[String],
+      graphDef: Broadcast[Array[Byte]],
+      tfOutputSchema: StructType): Array[Row] = {
+    // Some partitions may be empty
+    if (input.length == 0) {
+      return Array.empty
+    }
+    MemoizedSessions.withSession(sessionName, graphDef) { session =>
+      val requested = TensorFlowOps.stringVector(tfOutputSchema.map(_.name))
+      input.map { row =>
+        val stpv = DataOps.convert(row, inputSchema, inputTFCols)
+        val outputs = new jtf.TensorVector()
+        val skipped = new jtf.StringVector()
+        val s3 = tfLock.synchronized { session.Run(stpv, requested, skipped, outputs) }
+        assert(s3.ok(), s3.error_message().getString)
+        val it = DataOps.convertBack(outputs, tfOutputSchema, Array(row), inputSchema,
+          appendInput = true)
+        assert(it.hasNext)
+        val r = it.next()
+        assert(!it.hasNext)
+        r
+      }
+    }
   }
 
   def performMapRows(

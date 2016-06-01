@@ -9,7 +9,10 @@ package org.tensorframes
  */
 // TODO: rename to TFExtraInfo (?)
 // Some data constants to be used to fill the placeholders
-case class ShapeDescription(out: Map[String, Shape], requestedFetches: Seq[String]) {
+case class ShapeDescription(
+    out: Map[String, Shape],
+    requestedFetches: Seq[String],
+    requestedSession: Option[String] = None) {
 }
 
 object ShapeDescription {

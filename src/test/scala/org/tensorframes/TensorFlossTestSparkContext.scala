@@ -1,5 +1,7 @@
 package org.tensorframes
 
+import org.tensorframes.impl.{MemoizedSessions, MemoizedGraphs}
+
 import scala.reflect.runtime.universe._
 
 import org.scalatest.{BeforeAndAfterAll, Suite}
@@ -13,6 +15,8 @@ trait TensorFramesTestSparkContext extends BeforeAndAfterAll { self: Suite =>
 
   override def beforeAll() {
     super.beforeAll()
+    MemoizedGraphs.reset()
+    MemoizedSessions.reset()
     val conf = new SparkConf()
       .setMaster("local[1]")
       .setAppName("TensorFramesTest")
@@ -22,6 +26,8 @@ trait TensorFramesTestSparkContext extends BeforeAndAfterAll { self: Suite =>
   }
 
   override def afterAll() {
+    MemoizedGraphs.reset()
+    MemoizedSessions.reset()
     sqlContext = null
     if (sc != null) {
       sc.stop()
