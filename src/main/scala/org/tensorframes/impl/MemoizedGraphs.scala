@@ -1,12 +1,10 @@
 package org.tensorframes.impl
 
 import scala.util.control.NonFatal
-
 import org.bytedeco.javacpp.{tensorflow => jtf}
 import org.tensorflow.framework.GraphDef
-import org.tensorframes.ShapeDescription
-
-import org.apache.spark.{Logging, SparkContext}
+import org.tensorframes.{Logging, ShapeDescription}
+import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 
 /**
@@ -98,7 +96,7 @@ object MemoizedSessions extends Logging {
         session.close()
       } catch {
         case NonFatal(e) =>
-          logError(s"Session $name did not close as expected", e)
+          logInfo(s"ERROR Session $name did not close as expected" + e)
       }
     }
     savedSessions = Map.empty

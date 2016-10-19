@@ -1,23 +1,21 @@
-// Your sbt build file. Guides on how to write one can be found at
-// http://www.scala-sbt.org/0.13/docs/index.html
-
-//import sbtprotobuf.{ProtobufPlugin=>PB}
 import Dependencies._
+
+resolvers += "ASF repository" at "http://repository.apache.org/snapshots"
 
 name := "tensorframes"
 
-scalaVersion := "2.10.6"
+scalaVersion := "2.11.8"
 
 //crossScalaVersions := Seq("2.11.7", "2.10.6")
 
 // Don't forget to set the version
-version := "0.2.2"
+version := "0.2.4"
 
 classpathTypes += "maven-plugin"
 
 // ******* Spark-packages settings **********
 
-spName := "tjhunter/tensorframes"
+spName := "databricks/tensorframes"
 
 sparkVersion := targetSparkVersion
 
@@ -29,14 +27,14 @@ spIncludeMaven := false
 
 licenses := Seq("Apache-2.0" -> url("http://opensource.org/licenses/Apache-2.0"))
 
-spShortDescription := "Tensorflow wrapper for DataFrames on Apache Spark"
+spShortDescription := "TensorFlow wrapper for DataFrames on Apache Spark"
 
 spDescription := {
-  """TensorFrames (TensorFlow on Spark Dataframes) lets you manipulate Spark's DataFrames with
+  """TensorFrames (TensorFlow on Spark DataFrames) lets you manipulate Spark's DataFrames with
     | TensorFlow programs.
     |
     |This package provides a small runtime to express and run TensorFlow computation graphs.
-    |Tensorflow programs can be interpreted from:
+    |TensorFlow programs can be interpreted from:
     | - the official Python API
     | - the semi-official protocol buffer graph description format
     | - the Scala DSL embedded with TensorFrames (experimental)
@@ -58,9 +56,17 @@ libraryDependencies += "org.apache.spark" %% "spark-core" % targetSparkVersion %
 
 libraryDependencies += "org.apache.spark" %% "spark-sql" % targetSparkVersion % "provided"
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.3" % "test"
+libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.0"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.0" % "test"
 
 libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.4"
+
+// These versions are ancient, but they cross-compile around scala 2.10 and 2.11.
+// Update them when dropping support for scala 2.10
+
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging-api" % "2.1.2"
+
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging-slf4j" % "2.1.2"
 
 // Compilation of proto files
 
@@ -70,7 +76,7 @@ libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.4"
 
 // Could not get protobuf to work -> manually adding it
 
-libraryDependencies += "com.google.protobuf" % "protobuf-java" % "3.0.0-beta-1"
+libraryDependencies += "com.google.protobuf" % "protobuf-java" % "3.0.0"
 
 libraryDependencies += "org.bytedeco" % "javacpp" % targetJCPPVersion
 
@@ -85,7 +91,9 @@ javaOptions in run += "-Xmx6G"
 assemblyExcludedJars in assembly := {
   val cp = (fullClasspath in assembly).value
   val excludes = Set(
-    "tensorflow-0.8.0-1.2-macosx-x86_64.jar" // This is not the main target, excluding
+    "tensorflow-sources.jar",
+    "tensorflow-javadoc.jar"
+//    ,"tensorflow-0.8.0-1.2-macosx-x86_64.jar" // This is not the main target, excluding
   )
   cp filter { s => excludes.contains(s.data.getName) }
 }
