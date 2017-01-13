@@ -122,7 +122,7 @@ def _create_df(jdf, sql, graph):
     df.tf_graph = graph
     return df
 
-def reduce_rows(fetches, dframe):
+def reduce_rows(fetches, dframe, cache_graph=False):
     """ Applies the fetches on pairs of rows, so that only one row of data remains in the end. The order in which
     the operations are performed on the rows is unspecified.
 
@@ -154,7 +154,7 @@ def reduce_rows(fetches, dframe):
     fetches = _check_fetches(fetches)
     graph = _get_graph(fetches)
     builder = _java_api().reduce_rows(dframe._jdf)
-    _add_graph(graph, builder)
+    _add_graph(graph, builder, cache_graph)
     _add_shapes(graph, builder, fetches)
     df = builder.buildRow()
     return _unpack_row(df, fetches)
@@ -201,7 +201,7 @@ def map_rows(fetches, dframe, session=None, cache_graph=False):
     jdf = builder.buildDF()
     return _create_df(jdf, _sql, graph)
 
-def map_blocks(fetches, dframe, trim=False):
+def map_blocks(fetches, dframe, trim=False, cache_graph=False):
     """ Transforms a DataFrame into another DataFrame block by block.
 
     It either appends new columns to the DataFrame (trim = false), or it completely discards the
@@ -244,12 +244,12 @@ def map_blocks(fetches, dframe, trim=False):
     # We are not dealing for now with registered expansions, but this is something we should add later.
     graph = _get_graph(fetches)
     builder = _java_api().map_blocks(dframe._jdf, trim)
-    _add_graph(graph, builder)
+    _add_graph(graph, builder, cache_graph)
     _add_shapes(graph, builder, fetches)
     jdf = builder.buildDF()
     return _create_df(jdf, _sql, graph)
 
-def reduce_blocks(fetches, dframe):
+def reduce_blocks(fetches, dframe, cache_graph=False):
     """ Applies the fetches on blocks of rows, so that only one row of data remains in the end. The order in which
     the operations are performed on the rows is unspecified.
 
@@ -282,7 +282,7 @@ def reduce_blocks(fetches, dframe):
     fetches = _check_fetches(fetches)
     graph = _get_graph(fetches)
     builder = _java_api().reduce_blocks(dframe._jdf)
-    _add_graph(graph, builder)
+    _add_graph(graph, builder, cache_graph)
     _add_shapes(graph, builder, fetches)
     df = builder.buildRow()
     return _unpack_row(df, fetches)

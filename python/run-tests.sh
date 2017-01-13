@@ -45,9 +45,13 @@ JAR_PATH="$PROJECT_HOME/target/scala-$SCALA_SHORT_BINARY_VERSION/tensorframes-as
 
 export PYSPARK_SUBMIT_ARGS="--jars $JAR_PATH pyspark-shell"
 
-export PYTHONPATH=$PYTHONPATH:$SPARK_HOME/python:$LIBS:.
+export PYTHONPATH=$SPARK_HOME/python:$LIBS:.:$PYTHONPATH
 
 export PYTHONPATH=$PYTHONPATH:"$PROJECT_HOME/src/main/python/"
+
+echo "PYTHONPATH=$PYTHONPATH"
+echo "JAR_PATH=$JAR_PATH"
+echo "PROJECT_HOME=$PROJECT_HOME"
 
 # Run test suites
 

@@ -25,14 +25,25 @@ object ExtractNodes extends Matchers with Logging {
     Files.write(f.toPath, content.getBytes(StandardCharsets.UTF_8))
     val p = new ProcessBuilder("python", f.getAbsolutePath).start()
     val s = p.getInputStream
+    val sErr = p.getErrorStream
     val isr = new InputStreamReader(s)
+    val isrErr = new InputStreamReader(sErr)
     val br = new BufferedReader(isr)
+    val brErr = new BufferedReader(isrErr)
     var res: String = ""
     var str: String = ""
     while(str != null) {
       str = br.readLine()
       if (str != null) {
         res = res + "\n" + str
+      }
+    }
+    var resErr: String = ""
+    var strErr: String = ""
+    while(strErr != null) {
+      strErr = brErr.readLine()
+      if (strErr != null) {
+        resErr = resErr + "\n" + strErr
       }
     }
 
