@@ -112,7 +112,7 @@ private[tensorframes] sealed abstract class TensorConverter[@specialized(Double,
 
   // The return element is just here so that the method gets specialized (otherwise it would not).
   final def append(row: Row, position: Int): Array[T] = {
-    logger.debug(s"append: position=$position row=$row")
+//    logger.debug(s"append: position=$position row=$row")
     val d = shape.numDims
     if (d == 0) {
       appendRaw(row.getAs[T](position))

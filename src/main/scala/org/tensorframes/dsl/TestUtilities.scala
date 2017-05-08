@@ -35,5 +35,4 @@ private[tensorframes] object TestUtilities {
     val g = buildGraph(nodes.head, nodes.tail: _*)
     g -> TensorFlowOps.analyzeGraphTF(g, extraInfo(nodes))
   }
-
 }

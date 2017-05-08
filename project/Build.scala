@@ -115,6 +115,8 @@ object Shading extends Build {
     libraryDependencies ++= shadedDependencies,
     libraryDependencies ++= testDependencies,
     libraryDependencies ++= allPlatformDependencies,
+    // Show the full stack traces when something goes wrong in a test.
+    testOptions += Tests.Argument("-oF"),
     // Do not attempt to run tests when building the assembly.
     test in assembly := {},
     // Spark has a dependency on protobuf2, which conflicts with protobuf3.

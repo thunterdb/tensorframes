@@ -13,3 +13,35 @@ class TFUDF(
     Column(ScalaUDF(f, dataType, exprs.map(_.expr), Nil))
   }
 }
+
+class PipelinedUDF(udfs: Seq[UserDefinedFunction], returnType: DataType)
+  extends UserDefinedFunction(null, returnType, None) {
+  assert(udfs.nonEmpty)
+
+  override def apply(exprs: Column*): Column = {
+    val start = udfs.head.apply(exprs: _*)
+    var rest = start
+    for (udf <- udfs.tail) {
+      rest = udf.apply(rest)
+    }
+    rest
+  }
+}
+
+object TFUDF {
+  def make1(fun: Column => (Row => Row), returnType: DataType): TFUDF = {
+    new TFUDF(fun, returnType)
+  }
+
+  def makeUDF[U,V](f: U => V, returnType: DataType): UserDefinedFunction = {
+    UserDefinedFunction(f, returnType, None)
+  }
+
+  def pipeline(udf1: UserDefinedFunction, udfs: UserDefinedFunction*): UserDefinedFunction = {
+    if (udfs.isEmpty) {
+      udf1
+    } else {
+      new PipelinedUDF(Seq(udf1) ++ udfs, udfs.last.dataType)
+    }
+  }
+}

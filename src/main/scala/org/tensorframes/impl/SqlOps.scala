@@ -98,7 +98,7 @@ object SqlOps extends Logging {
         }   .toArray
       }
 
-      logTrace(s"mapRows: input schema = $inputSchema, requested cols: ${requestedTFInput.toSeq}" +
+      logDebug(s"makeUDF: input schema = $inputSchema, requested cols: ${requestedTFInput.toSeq}" +
         s" complete output schema = $outputSchema")
       // TODO: this is leaking the file.
       val sc = SparkContext.getOrCreate()
@@ -135,12 +135,13 @@ object SqlOps extends Logging {
       logDebug(s"performUDF:outs=$outs")
       // Close the inputs
       inputTensors.map(_._2).foreach(_.close())
-      val res = TFDataOps.convertBack(outs, tfOutputSchema, Array(row), inputSchema, appendInput = true)
+      val res = TFDataOps.convertBack(outs, tfOutputSchema, Array(row), inputSchema, appendInput = false)
       // Close the outputs
       outs.foreach(_.close())
       assert(res.hasNext)
       val r = res.next()
       assert(!res.hasNext)
+//      logDebug(s"performUDF: r=$r")
       r
     }
     f
@@ -163,6 +164,4 @@ object SqlOps extends Logging {
       current = None
       retrieveSession(g)
   }
-
-
 }
