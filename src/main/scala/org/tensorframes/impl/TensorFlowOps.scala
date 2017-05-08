@@ -2,6 +2,7 @@ package org.tensorframes.impl
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import java.util.Arrays
 
 import org.tensorflow.framework.GraphDef
 import org.{tensorflow => tf}
@@ -19,6 +20,7 @@ import scala.collection.JavaConverters._
   * a disk file, and serve the data from this disk file.
   */
 case class SerializedGraph private (
+  private val _hashCode: Int,
   private var _content: Option[Array[Byte]],
   private var file: Option[String]) extends Serializable with Logging {
 
@@ -31,6 +33,12 @@ case class SerializedGraph private (
         throw new Exception(s"Missing content for serialized graph $this")
       }
   }
+
+  /**
+   * The hash code of the graph data being addressed by this structure.
+   * @return
+   */
+  def dataHashCode: Int = _hashCode
 
   /**
     * Moves the graph description to a file, and drops the in-memory representation once it is safe to do so.
@@ -56,7 +64,8 @@ object SerializedGraph extends Logging {
   // Stored in memory by default, so that the broadcast mechanism can send it around.
   def create(content: Array[Byte]): SerializedGraph = {
     require(content != null)
-    new SerializedGraph(Some(content), None)
+    val hash = Arrays.hashCode(content)
+    new SerializedGraph(hash, Some(content), None)
   }
 }
 

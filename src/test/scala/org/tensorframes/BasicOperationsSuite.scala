@@ -3,6 +3,7 @@ package org.tensorframes
 import org.scalatest.FunSuite
 
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.functions.struct
 
 import org.tensorframes.dsl.Implicits._
 import org.tensorframes.dsl._
@@ -15,6 +16,15 @@ class BasicOperationsSuite
   import Shape.Unknown
 
   val ops = new DebugRowOps
+
+  testGraph("column identity") {
+    val df = make1(Seq(1.0, 2.0), "in")
+    val p1 = placeholder[Double](Unknown) named "in"
+    val out = identity(p1) named "out"
+    val col = struct(df.col("in")).selectTF(out).as("out")
+    val df2 = df.select(col)
+    compareRows(df2.collect(), Array(Row(1.0, 1.0), Row(2.0, 2.0)))
+  }
 
   testGraph("Identity") {
     val df = make1(Seq(1.0, 2.0), "in")

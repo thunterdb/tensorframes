@@ -1,11 +1,10 @@
 package org.tensorframes.dsl
 
 import scala.languageFeature.implicitConversions
-
 import scala.collection.JavaConverters._
-
-import org.apache.spark.sql.{RelationalGroupedDataset, Row, DataFrame}
+import org.apache.spark.sql.{Column, DataFrame, RelationalGroupedDataset, Row}
 import org.tensorflow.framework.GraphDef
+import org.tensorframes.impl.SqlOps
 import org.tensorframes.{ExperimentalOperations, OperationsInterface, ShapeDescription, dsl}
 
 /**
@@ -13,6 +12,16 @@ import org.tensorframes.{ExperimentalOperations, OperationsInterface, ShapeDescr
  */
 trait DFImplicits {
   protected def ops: OperationsInterface with ExperimentalOperations
+
+  implicit class RichColumn(col: Column) {
+    def selectTF(o0: Operation, os: Operation*): Column = {
+      val seq = Seq(o0) ++ os
+      val g = DslImpl.buildGraph(seq)
+      val hints = Node.hints(seq, g)
+      val udf = SqlOps.makeUDF(g, hints)
+      udf.apply(col)
+    }
+  }
 
   /**
    * This implicit augments Spark's DataFrame with a number of tensorflow-related methods.
