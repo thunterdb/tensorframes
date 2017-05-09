@@ -82,7 +82,7 @@ object TFDataOps extends Logging {
         throw new Exception(s"Could not column information for column $f")
       }
       assert(ci.shape.numDims >= 1,
-        s"Column $f found to be a scala, but its dimensions should be >= 1")
+        s"Column $f found to be a scalar, but its dimensions should be >= 1")
       // Special case: if the cell shape has undefined size in its first argument, we
       // still accept it and attempt to get it from the shape. This is to support rows
       // with different vector sizes. All other dimensions must match, although this

@@ -1,10 +1,13 @@
 package org.tensorframes.impl
 
+import java.util.Arrays
+
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.{Column, Row, TFUDF}
+import org.apache.spark.sql.functions.struct
 import org.apache.spark.sql.types.StructType
 import org.tensorflow.Session
 import org.tensorflow.framework.GraphDef
@@ -53,8 +56,18 @@ object SqlOps extends Logging {
 
     val outputSchema: StructType = StructType(outputTFSchema)
 
+    def processColumn(inputColumn: Column): Any => Row = {
+      // Special case: if the column has a single non-structural field and if
+      // there is a single input in the graph, we automatically wrap the input in a structure.
+      (inputs.keySet.toSeq, inputColumn.expr.dataType) match {
+        case (_, _: StructType) => processColumn0(inputColumn)
+        case (Seq(name1), _) => processColumn0(struct(inputColumn.alias(name1)))
+        case (names, dt) =>
+          throw new Exception(s"Too many graph inputs for the given column type: names=$names, dt=$dt")
+      }
+    }
 
-    def processColumn(inputColumn: Column): Row => Row = {
+    def processColumn0(inputColumn: Column): Any => Row = {
       val inputSchema = inputColumn.expr.dataType match {
         case st: StructType => st
         case x: Any => throw new Exception(
@@ -107,16 +120,22 @@ object SqlOps extends Logging {
       f
     }
 
-    new TFUDF(processColumn, outputSchema)
+    TFUDF.make1(processColumn, outputSchema)
   }
 
   def performUDF(
     inputSchema: StructType,
     inputTFCols: Array[(NodePath, Int)],
     g_bc: Broadcast[SerializedGraph],
-    tfOutputSchema: StructType): Row => Row = {
+    tfOutputSchema: StructType): Any => Row = {
 
-    def f(row: Row): Row = {
+    logDebug(s"performUDF: inputSchema=$inputSchema inputTFCols=${inputTFCols.toSeq}")
+
+    def f(in: Any): Row = {
+      val row = in match {
+        case r: Row => r
+        case x => Row(x)
+      }
       val g = g_bc.value
       val session = retrieveSession(g)
       g.evictContent()
@@ -154,14 +173,38 @@ object SqlOps extends Logging {
       val s = new Session(tg)
       current = Some(new LocalState(s, g.dataHashCode, tg))
       s
-    case Some(ls) if ls.graphHash == g.dataHashCode =>
-      // Reuse the current session
-      ls.session
     case Some(ls) =>
-      // Close the current session and open a new one.
-      ls.session.close()
-      ls.graph.close()
-      current = None
-      retrieveSession(g)
+      val hash = java.util.Arrays.hashCode(g.content)
+      if(ls.graphHash == hash) {
+        // Same hash -> reuse the session
+        ls.session
+      } else {
+        // Different hash -> close the session and open a new one.
+        ls.session.close()
+        ls.graph.close()
+        current = None
+        retrieveSession(g)
+      }
   }
+
+
+//  // This is a better version that uses the hash of the content, but it requires changes to
+//  // TensorFrames. Only use with version 0.2.9+
+//  private def retrieveSession0(g: SerializedGraph): Session = current match {
+//    case None =>
+//      val tg = new Graph()
+//      tg.importGraphDef(g.content)
+//      val s = new Session(tg)
+//      current = Some(new LocalState(s, g.dataHashCode, tg))
+//      s
+//    case Some(ls) if ls.graphHash == g.dataHashCode =>
+//      // Reuse the current session
+//      ls.session
+//    case Some(ls) =>
+//      // Close the current session and open a new one.
+//      ls.session.close()
+//      ls.graph.close()
+//      current = None
+//      retrieveSession(g)
+//  }
 }

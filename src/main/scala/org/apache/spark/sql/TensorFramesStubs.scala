@@ -5,7 +5,7 @@ import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.DataType
 
 class TFUDF(
-    fun: Column => (Row => Row), returnType: DataType)
+    fun: Column => (Any => Row), returnType: DataType)
   extends UserDefinedFunction(null, returnType, None) {
   override def apply(exprs: Column*): Column = {
     assert(exprs.size == 1, exprs)
@@ -29,7 +29,7 @@ class PipelinedUDF(udfs: Seq[UserDefinedFunction], returnType: DataType)
 }
 
 object TFUDF {
-  def make1(fun: Column => (Row => Row), returnType: DataType): TFUDF = {
+  def make1(fun: Column => (Any => Row), returnType: DataType): TFUDF = {
     new TFUDF(fun, returnType)
   }
 

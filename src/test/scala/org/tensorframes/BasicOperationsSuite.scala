@@ -29,6 +29,18 @@ class BasicOperationsSuite
     compareRows(df2.collect(), Array(Row(Row(1.0)), Row(Row(2.0))))
   }
 
+  testGraph("column identity (unwrapped)") {
+    // Build a simple dataframe
+    val df = make1(Seq(1.0, 2.0), "in_bad_name")
+    // Define a tensorflow graph
+    val p1 = placeholder[Double]() named "in"
+    val out = identity(p1) named "out"
+    // Use selectTF to call the UDF
+    val col = df.col("in_bad_name").selectTF(out).as("out")
+    val df2 = df.select(col)
+    compareRows(df2.collect(), Array(Row(Row(1.0)), Row(Row(2.0))))
+  }
+
   testGraph("Identity") {
     val df = make1(Seq(1.0, 2.0), "in")
     val p1 = placeholder[Double](Unknown) named "in"
