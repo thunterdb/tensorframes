@@ -1,15 +1,61 @@
 package org.tensorframes.impl
 
+import java.net.URL
 import java.nio.charset.Charset
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.nio.file.{Files, Paths}
 
 import scala.collection.JavaConverters._
+
+import org.apache.commons.io.{FileUtils, FilenameUtils}
+import org.tensorflow.framework.GraphDef
 
 import org.apache.spark.sql.{Row, TFUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.{ArrayType, StringType}
-import org.tensorflow.framework.GraphDef
+
 import org.tensorframes.{Logging, ShapeDescription}
-import java.nio.file.{Files, Paths}
+
+object FileOps extends Logging {
+  val modelDownloaded = new AtomicBoolean(false)
+
+  val localModelPath: String = {
+    Paths.get(
+      System.getProperty("java.io.tmpdir"), "inceptionv3-" + UUID.randomUUID().toString).toString
+  }
+
+  def downloadFile(url: String): Array[Byte] = {
+    // A hack to install model by hijacking donwload file ...
+    downloadAndInstallModel(localModelPath)
+
+    val stream = new URL(url).openStream()
+    val bytes = org.apache.commons.io.IOUtils.toByteArray(stream)
+    stream.close()
+    bytes
+  }
+
+  def downloadAndInstallModel(localPath: String): Unit = {
+    def download(sourceUrl: String): Unit = {
+      val url = new URL(sourceUrl)
+      val localFile = Paths.get(localPath, FilenameUtils.getName(url.getFile)).toFile
+      localFile.getParentFile.mkdirs()
+      FileUtils.copyURLToFile(url, localFile)
+    }
+
+    // Download the model, but only do it once per process.
+    if (!modelDownloaded.get) {
+      modelDownloaded.synchronized {
+        if (!modelDownloaded.get) {
+          download("http://home.apache.org/~rxin/models/inceptionv3/classes.txt")
+          download("http://home.apache.org/~rxin/models/inceptionv3/main.pb")
+          download("http://home.apache.org/~rxin/models/inceptionv3/preprocessor.pb")
+          modelDownloaded.set(true)
+        }
+      }
+    }
+  }
+}
 
 /**
  * Experimental class that contains the image-related code.
@@ -37,6 +83,11 @@ object ImageOps extends Logging {
     val udf2 = TFUDF.makeUDF(f2, returnType)
     udf2
   }
+
+  def makeImageClassifier(): UserDefinedFunction = {
+    makeImageClassifier(FileOps.localModelPath)
+  }
+
 
   /**
    * Makes an image classifier from an existing model. The model must be exported from Python first.

@@ -1,7 +1,5 @@
 package org.tensorframes.impl
 
-import java.util.Arrays
-
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -111,7 +109,7 @@ object SqlOps extends Logging {
         }   .toArray
       }
 
-      logDebug(s"makeUDF: input schema = $inputSchema, requested cols: ${requestedTFInput.toSeq}" +
+      logger.debug(s"makeUDF: input schema = $inputSchema, requested cols: ${requestedTFInput.toSeq}" +
         s" complete output schema = $outputSchema")
       // TODO: this is leaking the file.
       val sc = SparkContext.getOrCreate()
@@ -129,7 +127,7 @@ object SqlOps extends Logging {
     g_bc: Broadcast[SerializedGraph],
     tfOutputSchema: StructType): Any => Row = {
 
-    logDebug(s"performUDF: inputSchema=$inputSchema inputTFCols=${inputTFCols.toSeq}")
+    logger.debug(s"performUDF: inputSchema=$inputSchema inputTFCols=${inputTFCols.toSeq}")
 
     def f(in: Any): Row = {
       val row = in match {
@@ -141,7 +139,7 @@ object SqlOps extends Logging {
       g.evictContent()
 
       val inputTensors = TFDataOps.convert(row, inputSchema, inputTFCols)
-      logDebug(s"performUDF:inputTensors=$inputTensors")
+      logger.debug(s"performUDF:inputTensors=$inputTensors")
       val requested = tfOutputSchema.map(_.name)
       var runner = session.runner()
       for (req <- requested) {
@@ -151,7 +149,7 @@ object SqlOps extends Logging {
         runner = runner.feed(inputName, inputTensor)
       }
       val outs = runner.run().asScala
-      logDebug(s"performUDF:outs=$outs")
+      logger.debug(s"performUDF:outs=$outs")
       // Close the inputs
       inputTensors.map(_._2).foreach(_.close())
       val res = TFDataOps.convertBack(outs, tfOutputSchema, Array(row), inputSchema, appendInput = false)
@@ -171,7 +169,8 @@ object SqlOps extends Logging {
       val tg = new Graph()
       tg.importGraphDef(g.content)
       val s = new Session(tg)
-      current = Some(new LocalState(s, g.dataHashCode, tg))
+      val hash = java.util.Arrays.hashCode(g.content)
+      current = Some(new LocalState(s, hash, tg))
       s
     case Some(ls) =>
       val hash = java.util.Arrays.hashCode(g.content)
