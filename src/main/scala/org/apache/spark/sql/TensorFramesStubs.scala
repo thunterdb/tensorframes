@@ -1,6 +1,6 @@
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.ScalaUDF
+import org.apache.spark.sql.catalyst.expressions.{Expression, ScalaUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.DataType
 
@@ -43,5 +43,13 @@ object TFUDF {
     } else {
       new PipelinedUDF(Seq(udf1) ++ udfs, udfs.last.dataType)
     }
+  }
+}
+
+object TensorFramesUDF {
+  def registerUDF(spark: SparkSession, name: String, udf: UserDefinedFunction): UserDefinedFunction = {
+    def builder(children: Seq[Expression]) = udf.apply(children.map(Column.apply) : _*).expr
+    spark.sessionState.functionRegistry.registerFunction(name, builder)
+    udf
   }
 }

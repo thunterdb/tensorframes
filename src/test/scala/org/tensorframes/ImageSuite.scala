@@ -5,7 +5,8 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.struct
 import org.tensorframes.dsl.Implicits._
 import org.tensorframes.dsl._
-import org.tensorframes.impl.{DebugRowOps, ImageOps}
+import org.tensorframes.impl.DebugRowOps
+import org.tensorframes.impl_images.ImageOps
 
 // Some basic operations that stress shape transforms mostly.
 class ImageSuite

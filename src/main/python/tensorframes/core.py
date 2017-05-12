@@ -135,6 +135,8 @@ def _map(fetches, dframe, feed_dict, block, trim):
     return DataFrame(jdf, _sql)
 
 
+
+
 def reduce_rows(fetches, dframe):
     """ Applies the fetches on pairs of rows, so that only one row of data remains in the end. The order in which
     the operations are performed on the rows is unspecified.

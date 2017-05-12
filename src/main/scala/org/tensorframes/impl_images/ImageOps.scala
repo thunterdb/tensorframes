@@ -1,21 +1,20 @@
-package org.tensorframes.impl
+package org.tensorframes.impl_images
 
 import java.net.URL
 import java.nio.charset.Charset
+import java.nio.file.{Files, Paths}
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
-import java.nio.file.{Files, Paths}
-
-import scala.collection.JavaConverters._
 
 import org.apache.commons.io.{FileUtils, FilenameUtils}
-import org.tensorflow.framework.GraphDef
-
-import org.apache.spark.sql.{Row, TFUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.{ArrayType, StringType}
-
+import org.apache.spark.sql.{Row, TFUDF}
+import org.tensorflow.framework.GraphDef
+import org.tensorframes.impl.SqlOps
 import org.tensorframes.{Logging, ShapeDescription}
+
+import scala.collection.JavaConverters._
 
 object FileOps extends Logging {
   val modelDownloaded = new AtomicBoolean(false)
