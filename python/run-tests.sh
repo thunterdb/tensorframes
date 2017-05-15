@@ -85,22 +85,10 @@ export PYTHONPATH=$PYTHONPATH:$PROJECT_HOME/src/main/python:$PROJECT_HOME/src/ma
 echo "python path: $PYTHONPATH"
 
 export TF_CPP_MIN_LOG_LEVEL=2  # Warning level
-
-#ipython
-
 # Run test suites
 
-if [[ "$python_major" == "2" ]]; then
 
-  # Horrible hack for spark 1.x: we manually remove some log lines to stay below the 4MB log limit on Travis.
-  $PYSPARK_DRIVER_PYTHON `which nosetests` -v --all-modules -w "$PROJECT_HOME/src/main/python" 2>&1 | grep -vE "INFO (ParquetOutputFormat|SparkContext|ContextCleaner|ShuffleBlockFetcherIterator|MapOutputTrackerMaster|TaskSetManager|Executor|MemoryStore|CacheManager|BlockManager|DAGScheduler|PythonRDD|TaskSchedulerImpl|ZippedPartitionsRDD2)";
-
-else
-
-  # Explicitly specify the modules to test, because nose has some issues in Nix.
-  $PYSPARK_DRIVER_PYTHON -m "nose" -v --all-modules "$PROJECT_HOME/src/main/python/tensorframes/core_test.py" 2>&1 | grep -vE "INFO (ParquetOutputFormat|SparkContext|ContextCleaner|ShuffleBlockFetcherIterator|MapOutputTrackerMaster|TaskSetManager|Executor|MemoryStore|CacheManager|BlockManager|DAGScheduler|PythonRDD|TaskSchedulerImpl|ZippedPartitionsRDD2)";
-
-fi
+$PYSPARK_DRIVER_PYTHON -m "nose" -v  --exe --all-modules "$PROJECT_HOME/src/main/python/tensorframes/sql_test.py" 2>&1 | grep -vE "INFO (ParquetOutputFormat|SparkContext|ContextCleaner|ShuffleBlockFetcherIterator|MapOutputTrackerMaster|TaskSetManager|Executor|MemoryStore|CacheManager|BlockManager|DAGScheduler|PythonRDD|TaskSchedulerImpl|ZippedPartitionsRDD2)";
 
 # Exit immediately if the tests fail.
 # Since we pipe to remove the output, we need to use some horrible BASH features:

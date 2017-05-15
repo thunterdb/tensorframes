@@ -9,6 +9,8 @@ from pyspark import RDD, SparkContext
 from pyspark.sql import SQLContext, Row, DataFrame
 from pyspark.sql.types import DoubleType, IntegerType, LongType, FloatType, ArrayType
 
+from .core import _check_fetches, _get_graph, _add_graph, _add_shapes, _add_inputs
+
 __all__ = ['registerUDF']
 
 
@@ -17,7 +19,7 @@ _sql = None
 logger = logging.getLogger('tensorframes')
 
 
-def _java_api(javaClassName = "org.tensorframes.impl_images.PythonModelFactory"):
+def _java_api(javaClassName = "org.tensorframes.impl_images.PythonModelFactory", sqlCtx = None):
     """
     Loads the PythonInterface object (lazily, because the spark context needs to be initialized
     first).
@@ -26,7 +28,10 @@ def _java_api(javaClassName = "org.tensorframes.impl_images.PythonModelFactory")
     if _sc is None:
         _sc = SparkContext._active_spark_context
         logger.info("Spark context = " + str(_sc))
-        _sql = SQLContext(_sc)
+        if not sqlCtx:
+            _sql = SQLContext(_sc)
+        else:
+            _sql = sqlCtx
     _jvm = _sc._jvm
     # You cannot simply call the creation of the the class on the _jvm due to classloader issues
     # with Py4J.
@@ -52,3 +57,9 @@ def registerUDF(fetches, name, feed_dict=None):
     # We are not dealing for now with registered expansions, but this is something we should add later.
     graph = _get_graph(fetches)
     builder = _java_api()
+    _add_graph(graph, builder)
+    ph_names = _add_shapes(graph, builder, fetches)
+    _add_inputs(builder, feed_dict, ph_names)
+    # Set the SQL context for the builder.
+    builder.sqlContext(_sql._ssql_ctx)
+    builder.registerUDF(name)

@@ -3,11 +3,13 @@ package org.tensorframes.impl_images
 import java.nio.file.{Files, Paths}
 import java.util
 
+import org.apache.log4j.PropertyConfigurator
+
 import scala.collection.JavaConverters._
 import org.apache.spark.sql.{SQLContext, SparkSession, TensorFramesUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.tensorflow.framework.GraphDef
-import org.tensorframes.{Shape, ShapeDescription}
+import org.tensorframes.{Logging, Shape, ShapeDescription}
 import org.tensorframes.impl.{SerializedGraph, SqlOps, TensorFlowOps}
 
 /**
@@ -18,12 +20,30 @@ class ModelFactory {
 }
 
 // TODO: merge with the python factory eventually, this is essentially copy/paste
-class PythonModelFactory() {
+class PythonModelFactory() extends Logging {
   private var _shapeHints: ShapeDescription = ShapeDescription.empty
   // TODO: this object may leak because of Py4J -> do not hold to large objects here.
   private var _graph: SerializedGraph = null
   private var _graphPath: Option[String] = None
   private var _sqlCtx: SQLContext = null
+
+  def initialize_logging(): Unit = initialize_logging("org/tensorframes/log4j.properties")
+
+  /**
+   * Performs some logging initialization before spark has the time to do it.
+   *
+   * Because of the the current implementation of PySpark, Spark thinks it runs as an interactive
+   * console and makes some mistake when setting up log4j.
+   */
+  private def initialize_logging(file: String): Unit = {
+    Option(this.getClass.getClassLoader.getResource(file)) match {
+      case Some(url) =>
+        PropertyConfigurator.configure(url)
+      case None =>
+        System.err.println(s"$this Could not load logging file $file")
+    }
+  }
+
 
 
   def shape(
@@ -82,21 +102,19 @@ class PythonModelFactory() {
    *
    */
   // TODO: merge with PythonInterface. It is easier to keep separate for the time being.
-  def makeUDF(fieldNames: util.ArrayList[String]): UserDefinedFunction = {
+  def makeUDF(): UserDefinedFunction = {
     SqlOps.makeUDF(buildGraphDef(), _shapeHints)
   }
 
   /**
    * Registers a TF UDF under the given name in Spark.
-   * @param fieldNames
    * @param udfName
    * @return
    */
-  def registerUDF(
-      fieldNames: util.ArrayList[String],
-      udfName: String): UserDefinedFunction = {
+  def registerUDF(udfName: String): UserDefinedFunction = {
     assert(_sqlCtx != null)
-    val udf = makeUDF(fieldNames)
+    val udf = makeUDF()
+    logger.warn(s"Registering udf $udfName -> $udf to session ${_sqlCtx.sparkSession}")
     TensorFramesUDF.registerUDF(_sqlCtx.sparkSession, udfName, udf)
   }
 }
