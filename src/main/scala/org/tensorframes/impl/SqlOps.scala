@@ -1,5 +1,7 @@
 package org.tensorframes.impl
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.JavaConverters._
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -21,9 +23,24 @@ import org.tensorframes.{ColumnInformation, Shape, ShapeDescription, _}
 object SqlOps extends Logging {
   import SchemaTransforms.{get, check}
 
-  private class LocalState(val session: Session, val graphHash: Int, val graph: Graph)
+  // Counter: the number of sessions currently opened.
+  private class LocalState(
+      val session: Session,
+      val graphHash: Int,
+      val graph: Graph,
+      val counter: AtomicInteger) {
+    def close(): Unit = {
+      session.close()
+      graph.close()
+    }
+  }
 
-  private[this] var current: Option[LocalState] = None
+  // A map of graph hash -> state for this graph.
+  private[this] var current: Map[Int, LocalState] = Map.empty
+  private[this] val lock = new Object()
+
+  // The maximum number of sessions that can be opened concurrently.
+  val maxSessions: Int = 5
 
   /**
    * Experimental: expresses a Row transform as a SQL-registrable UDF.
@@ -135,75 +152,86 @@ object SqlOps extends Logging {
         case x => Row(x)
       }
       val g = g_bc.value
-      val session = retrieveSession(g)
-      g.evictContent()
-
-      val inputTensors = TFDataOps.convert(row, inputSchema, inputTFCols)
-      logger.debug(s"performUDF:inputTensors=$inputTensors")
-      val requested = tfOutputSchema.map(_.name)
-      var runner = session.runner()
-      for (req <- requested) {
-        runner = runner.fetch(req)
+      retrieveSession(g) { session =>
+        g.evictContent()
+        val inputTensors = TFDataOps.convert(row, inputSchema, inputTFCols)
+        logger.debug(s"performUDF:inputTensors=$inputTensors")
+        val requested = tfOutputSchema.map(_.name)
+        var runner = session.runner()
+        for (req <- requested) {
+          runner = runner.fetch(req)
+        }
+        for ((inputName, inputTensor) <- inputTensors) {
+          runner = runner.feed(inputName, inputTensor)
+        }
+        val outs = runner.run().asScala
+        logger.debug(s"performUDF:outs=$outs")
+        // Close the inputs
+        inputTensors.map(_._2).foreach(_.close())
+        val res = TFDataOps.convertBack(outs, tfOutputSchema, Array(row), inputSchema, appendInput = false)
+        // Close the outputs
+        outs.foreach(_.close())
+        assert(res.hasNext)
+        val r = res.next()
+        assert(!res.hasNext)
+        //      logDebug(s"performUDF: r=$r")
+        r
       }
-      for ((inputName, inputTensor) <- inputTensors) {
-        runner = runner.feed(inputName, inputTensor)
-      }
-      val outs = runner.run().asScala
-      logger.debug(s"performUDF:outs=$outs")
-      // Close the inputs
-      inputTensors.map(_._2).foreach(_.close())
-      val res = TFDataOps.convertBack(outs, tfOutputSchema, Array(row), inputSchema, appendInput = false)
-      // Close the outputs
-      outs.foreach(_.close())
-      assert(res.hasNext)
-      val r = res.next()
-      assert(!res.hasNext)
-//      logDebug(s"performUDF: r=$r")
-      r
     }
     f
   }
 
-  private def retrieveSession(g: SerializedGraph): Session = current match {
-    case None =>
-      val tg = new Graph()
-      tg.importGraphDef(g.content)
-      val s = new Session(tg)
-      val hash = java.util.Arrays.hashCode(g.content)
-      current = Some(new LocalState(s, hash, tg))
-      s
-    case Some(ls) =>
-      val hash = java.util.Arrays.hashCode(g.content)
-      if(ls.graphHash == hash) {
-        // Same hash -> reuse the session
-        ls.session
-      } else {
-        // Different hash -> close the session and open a new one.
-        ls.session.close()
-        ls.graph.close()
-        current = None
-        retrieveSession(g)
-      }
+  private def retrieveSession[T](g: SerializedGraph)(f: Session => T): T = {
+    //  // This is a better version that uses the hash of the content, but it requires changes to
+    //  // TensorFrames. Only use with version 0.2.9+
+    val hash = java.util.Arrays.hashCode(g.content)
+    retrieveSession(g, hash, f)
   }
 
+  private def retrieveSession[T](g: SerializedGraph, gHash: Int, f: Session => T): T = {
+    // Do some cleanup first:
+    lock.synchronized {
+      val numberOfSessionsToClose = Math.max(current.size - maxSessions, 0)
+      // This is best effort only, there may be more sessions opened at some point.
+      if (numberOfSessionsToClose > 0) {
+        // Find some sessions to close: they are not currently used, and they are not the requested session.
+        val sessionsToRemove = current.valuesIterator
+          .filter { s => s.counter.get() == 0 && s.graphHash != gHash }
+          .take(numberOfSessionsToClose)
+        for (state <- sessionsToRemove) {
+          logger.debug(s"Removing session ${state.graphHash}")
+          state.close()
+          current = current - state.graphHash
+        }
+      }
+    }
 
-//  // This is a better version that uses the hash of the content, but it requires changes to
-//  // TensorFrames. Only use with version 0.2.9+
-//  private def retrieveSession0(g: SerializedGraph): Session = current match {
-//    case None =>
-//      val tg = new Graph()
-//      tg.importGraphDef(g.content)
-//      val s = new Session(tg)
-//      current = Some(new LocalState(s, g.dataHashCode, tg))
-//      s
-//    case Some(ls) if ls.graphHash == g.dataHashCode =>
-//      // Reuse the current session
-//      ls.session
-//    case Some(ls) =>
-//      // Close the current session and open a new one.
-//      ls.session.close()
-//      ls.graph.close()
-//      current = None
-//      retrieveSession(g)
-//  }
+    // Now, try to retrieve the session, or create a new one.
+    // TODO: use a double lock mechanism or a lazy value, since importing a graph may take a long time.
+    val state = lock.synchronized {
+      val state0 = current.get(gHash) match {
+        case None =>
+          // Add a new session
+          val tg = new Graph()
+          tg.importGraphDef(g.content)
+          val s = new Session(tg)
+          val ls = new LocalState(s, gHash, tg, new AtomicInteger(0))
+          current = current + (gHash -> ls)
+          ls
+        case Some(ls) =>
+          // Serve the existing session
+          ls
+      }
+      // Increment the counter in the locked section, to guarantee that the session does not get collected.
+      state0.counter.incrementAndGet()
+      state0
+    }
+
+    // Perform the action
+    try {
+      f(state.session)
+    } finally {
+      state.counter.decrementAndGet()
+    }
+  }
 }

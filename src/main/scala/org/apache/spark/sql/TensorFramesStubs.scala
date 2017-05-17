@@ -1,4 +1,4 @@
-package org.apache.spark.sql
+package org.apache.spark.sql.
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, ScalaUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
