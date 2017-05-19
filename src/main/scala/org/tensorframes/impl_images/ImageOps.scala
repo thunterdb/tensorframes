@@ -9,7 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.commons.io.{FileUtils, FilenameUtils}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.{ArrayType, StringType}
-import org.apache.spark.sql.{Row, TFUDF}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.tfs_stubs.TFUDF
 import org.tensorflow.framework.GraphDef
 import org.tensorframes.impl.SqlOps
 import org.tensorframes.{Logging, ShapeDescription}
@@ -125,8 +126,8 @@ object ImageOps extends Logging {
       graph: GraphDef,
       shapeHints: ShapeDescription,
       classes: Seq[String]): UserDefinedFunction = {
-    val udf0 = SqlOps.makeUDF(preprocessGraph, preprocessShapeHints)
-    val udf1 = SqlOps.makeUDF(graph, shapeHints)
+    val udf0 = SqlOps.makeUDF(preprocessGraph, preprocessShapeHints, applyBlocks = false)
+    val udf1 = SqlOps.makeUDF(graph, shapeHints, applyBlocks = false)
     val udf2 = postprocessUDF(classes, 0.7)
     TFUDF.pipeline(udf0, udf1, udf2)
   }

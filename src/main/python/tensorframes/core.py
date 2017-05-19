@@ -249,6 +249,7 @@ def map_blocks(fetches, dframe, trim=False):
 
     :param fetches: see description above
     :param dframe: a Spark DataFrame
+    :param trim: a boolean
     :return: a Spark DataFrame
     """
     # TODO: add feed dictionary

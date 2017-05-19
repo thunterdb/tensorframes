@@ -6,7 +6,8 @@ import scala.collection.JavaConverters._
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.{Column, Row, TFUDF}
+import org.apache.spark.sql.{Column, Row}
+import org.apache.spark.sql.tfs_stubs.TFUDF
 import org.apache.spark.sql.functions.struct
 import org.apache.spark.sql.types.StructType
 import org.tensorflow.Session
@@ -48,10 +49,13 @@ object SqlOps extends Logging {
    * This is not as efficient as doing a direct dataframe transform, and it leaks
    * some resources after the completion of the transform. These resources may easily be
    * be reclaimed though.
+   *
+   * applyBlocks: if true, the graph is assumed to accepted vectorized inputs.
    */
   def makeUDF(
       graph: GraphDef,
-      shapeHints: ShapeDescription): UserDefinedFunction = {
+      shapeHints: ShapeDescription,
+      applyBlocks: Boolean): UserDefinedFunction = {
     val summary = TensorFlowOps.analyzeGraphTF(graph, shapeHints)
       .map(x => x.name -> x).toMap
     val inputs = summary.filter(_._2.isInput)
@@ -61,9 +65,12 @@ object SqlOps extends Logging {
     val outputTFSchema: StructType = {
       // The order of the output columns is decided for now by their names.
       val fields = outputs.values.toSeq.sortBy(_.name).map { out =>
-        // The shapes we get in each output node are the shape of the cells of each column, not the
-        // shape of the column. Add Unknown since we do not know the exact length of the block.
-        val blockShape = out.shape.prepend(Shape.Unknown)
+        // Compute the shape of the block. If the data is blocked, there is no need to append an extra dimension.
+        val blockShape = if (applyBlocks) { out.shape } else {
+          // The shapes we get in each output node are the shape of the cells of each column, not the
+          // shape of the column. Add Unknown since we do not know the exact length of the block.
+          out.shape.prepend(Shape.Unknown)
+        }
         ColumnInformation.structField(out.name, out.scalarType, blockShape)
       }
       StructType(fields.toArray)
@@ -108,10 +115,20 @@ object SqlOps extends Logging {
             s"of the column (${in.scalarType})")
 
         val cellShape = stf.shape.tail
-        // No check for unknowns: we allow unknowns in the first dimension of the cell shape.
-        check(cellShape.checkMorePreciseThan(in.shape),
-          s"The data column '${f.name}' has shape ${stf.shape} (not compatible) with shape" +
-            s" ${in.shape} requested by the TF graph")
+        if (applyBlocks) {
+          check(in.shape.numDims >= 1,
+          s"The input '${in.name}' is expected to at least a vector, but it currently scalar")
+          // Check against the tail (which should be the cell).
+          check(cellShape.checkMorePreciseThan(in.shape.tail),
+            s"The data column '${f.name}' has shape ${stf.shape} (not compatible) with shape" +
+              s" ${in.shape} requested by the TF graph")
+        } else {
+          val cellShape = stf.shape.tail
+          // No check for unknowns: we allow unknowns in the first dimension of the cell shape.
+          check(cellShape.checkMorePreciseThan(in.shape),
+            s"The data column '${f.name}' has shape ${stf.shape} (not compatible) with shape" +
+              s" ${in.shape} requested by the TF graph")
+        }
 
         check(in.isPlaceholder,
           s"Invalid type for input node ${in.name}. It has to be a placeholder")
@@ -131,7 +148,7 @@ object SqlOps extends Logging {
       // TODO: this is leaking the file.
       val sc = SparkContext.getOrCreate()
       val gProto = sc.broadcast(TensorFlowOps.graphSerial(graph))
-      val f = performUDF(inputSchema, requestedTFInput, gProto, outputTFSchema)
+      val f = performUDF(inputSchema, requestedTFInput, gProto, outputTFSchema, applyBlocks)
       f
     }
 
@@ -142,7 +159,8 @@ object SqlOps extends Logging {
     inputSchema: StructType,
     inputTFCols: Array[(NodePath, Int)],
     g_bc: Broadcast[SerializedGraph],
-    tfOutputSchema: StructType): Any => Row = {
+    tfOutputSchema: StructType,
+    applyBlocks: Boolean): Any => Row = {
 
     logger.debug(s"performUDF: inputSchema=$inputSchema inputTFCols=${inputTFCols.toSeq}")
 

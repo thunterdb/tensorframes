@@ -1,17 +1,13 @@
 
 
-import tensorflow as tf
-import numpy as np
 import logging
-import tempfile
 
 from pyspark import RDD, SparkContext
 from pyspark.sql import SQLContext, Row, DataFrame
-from pyspark.sql.types import DoubleType, IntegerType, LongType, FloatType, ArrayType
 
 from .core import _check_fetches, _get_graph, _add_graph, _add_shapes, _add_inputs
 
-__all__ = ['registerUDF']
+#__all__ = ['registerUDF']
 
 
 _sc = None
@@ -39,7 +35,7 @@ def _java_api(javaClassName = "org.tensorframes.impl_images.PythonModelFactory",
         .newInstance()
 
 
-def registerUDF(fetches, name, feed_dict=None):
+def registerUDF(fetches, name, feed_dict=None, blocked=False):
     """ Registers a transform as a SQL UDF in Spark that can then be embedded inside SQL queries.
 
     Note regarding performance and resource management: registering a TensorFlow object as a SQL UDF
@@ -51,6 +47,8 @@ def registerUDF(fetches, name, feed_dict=None):
     :param fetches:
     :param name: the name of the UDF that will be used in SQL
     :param feed_dict
+    :param blocked: if set to true, the tensorflow program is expected to manipulate blocks of data at the same time.
+      If the number of rows returned is different than the number of rows ingested, an error is raised.
     :return: nothing
     """
     fetches = _check_fetches(fetches)
@@ -62,4 +60,4 @@ def registerUDF(fetches, name, feed_dict=None):
     _add_inputs(builder, feed_dict, ph_names)
     # Set the SQL context for the builder.
     builder.sqlContext(_sql._ssql_ctx)
-    builder.registerUDF(name)
+    builder.registerUDF(name, blocked)

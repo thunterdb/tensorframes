@@ -6,7 +6,8 @@ import java.util
 import org.apache.log4j.PropertyConfigurator
 
 import scala.collection.JavaConverters._
-import org.apache.spark.sql.{SQLContext, SparkSession, TensorFramesUDF}
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.tfs_stubs.TensorFramesUDF
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.tensorflow.framework.GraphDef
 import org.tensorframes.{Logging, Shape, ShapeDescription}
@@ -43,7 +44,6 @@ class PythonModelFactory() extends Logging {
         System.err.println(s"$this Could not load logging file $file")
     }
   }
-
 
 
   def shape(
@@ -102,18 +102,19 @@ class PythonModelFactory() extends Logging {
    *
    */
   // TODO: merge with PythonInterface. It is easier to keep separate for the time being.
-  def makeUDF(): UserDefinedFunction = {
-    SqlOps.makeUDF(buildGraphDef(), _shapeHints)
+  def makeUDF(applyBlocks: Boolean): UserDefinedFunction = {
+    SqlOps.makeUDF(buildGraphDef(), _shapeHints, applyBlocks=applyBlocks)
   }
 
   /**
    * Registers a TF UDF under the given name in Spark.
-   * @param udfName
+   * @param udfName the name of the UDF
+   * @param blocked indicates that the UDF should be applied block-wise.
    * @return
    */
-  def registerUDF(udfName: String): UserDefinedFunction = {
+  def registerUDF(udfName: String, blocked: java.lang.Boolean): UserDefinedFunction = {
     assert(_sqlCtx != null)
-    val udf = makeUDF()
+    val udf = makeUDF(blocked)
     logger.warn(s"Registering udf $udfName -> $udf to session ${_sqlCtx.sparkSession}")
     TensorFramesUDF.registerUDF(_sqlCtx.sparkSession, udfName, udf)
   }

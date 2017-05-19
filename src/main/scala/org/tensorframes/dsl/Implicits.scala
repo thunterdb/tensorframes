@@ -18,7 +18,7 @@ trait DFImplicits {
       val seq = Seq(o0) ++ os
       val g = DslImpl.buildGraph(seq)
       val hints = Node.hints(seq, g)
-      val udf = SqlOps.makeUDF(g, hints)
+      val udf = SqlOps.makeUDF(g, hints, applyBlocks = false)
       udf.apply(col)
     }
   }

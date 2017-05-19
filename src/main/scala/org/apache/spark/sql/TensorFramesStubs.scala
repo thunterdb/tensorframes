@@ -1,8 +1,9 @@
-package org.apache.spark.sql.
+package org.apache.spark.sql.tfs_stubs
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, ScalaUDF}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.{Column, Row, SparkSession}
 
 class TFUDF(
     fun: Column => (Any => Row), returnType: DataType)

@@ -47,6 +47,25 @@ class TestSql(object):
         data2 = df2.collect()
         assert data2[0].z == 3.0, data2
 
+
+    def test_map_blocks_sql_1(self):
+        data = [Row(x=float(x)) for x in range(5)]
+        df = self.sql.createDataFrame(data)
+        with tf.Graph().as_default():
+            # The placeholder that corresponds to column 'x'
+            x = tf.placeholder(tf.double, shape=[None], name="x")
+            # The output that adds 3 to x
+            z = tf.add(x, 3, name='z')
+            # Let's register these computations in SQL.
+            registerUDF(z, "map_blocks_sql_1", blocked=True)
+        # Here we go, for the SQL users, straight from PySpark.
+        df2 = df.selectExpr("map_blocks_sql_1(x).z AS z")
+        print("df2 = %s" % df2)
+        data2 = df2.collect()
+        assert len(data2) == 5, data2
+        assert data2[0].z == 3.0, data2
+
+
 if __name__ == "__main__":
     # Some testing stuff that should not be executed
     with tf.Graph().as_default() as g:

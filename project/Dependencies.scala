@@ -12,7 +12,7 @@ import xml.transform.{RuleTransformer, RewriteRule}
 
 object Dependencies {
   // The spark version
-  val targetSparkVersion = sys.props.getOrElse("spark.version", "2.1.0")
+  val targetSparkVersion = sys.props.getOrElse("spark.version", "2.1.1")
 
   val targetTensorFlowVersion = "1.1.0-rc1"
 
