@@ -41,7 +41,7 @@ object SqlOps extends Logging {
   private[this] val lock = new Object()
 
   // The maximum number of sessions that can be opened concurrently.
-  val maxSessions: Int = 5
+  val maxSessions: Int = 10
 
   /**
    * Experimental: expresses a Row transform as a SQL-registrable UDF.
