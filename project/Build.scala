@@ -12,7 +12,7 @@ object Shading extends Build {
 
   lazy val commonSettings = Seq(
     version := "0.3.0",
-    name := "tensorframes",
+    name := "tensorframes-gpu",
     scalaVersion := sys.props.getOrElse("scala.version", "2.11.8"),
     organization := "databricks",
     sparkVersion := targetSparkVersion,
@@ -51,7 +51,8 @@ object Shading extends Build {
     "com.typesafe.scala-logging" %% "scala-logging-api" % "2.1.2",
     "com.typesafe.scala-logging" %% "scala-logging-slf4j" % "2.1.2",
     // TensorFlow dependencies
-    "org.tensorflow" % "tensorflow" % targetTensorFlowVersion
+    "org.tensorflow" % "libtensorflow" % targetTensorFlowVersion,
+    "org.tensorflow" % "libtensorflow_jni_gpu" % targetTensorFlowVersion
   )
 
   lazy val testDependencies = Seq(
@@ -85,7 +86,7 @@ object Shading extends Build {
     libraryDependencies := nonShadedDependencies,
     libraryDependencies ++= sparkDependencies.map(_ % "provided"),
     libraryDependencies ++= testDependencies,
-    spName := "databricks/tensorframes",
+    spName := "databricks/tensorframes-gpu",
     spShortDescription := "TensorFlow wrapper for DataFrames on Apache Spark",
     spDescription := {
       """TensorFrames (TensorFlow on Spark DataFrames) lets you manipulate Spark's DataFrames with
